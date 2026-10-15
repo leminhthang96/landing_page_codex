@@ -1389,6 +1389,19 @@
       margin-top: 16px;
     }
 
+    .contact-form .button:disabled {
+      opacity: 0.65;
+      cursor: wait;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .contact-form .form-error {
+      margin: 12px 0 0;
+      color: #b42318;
+      font-size: 13px;
+    }
+
     .form-note {
       margin: 11px 0 0;
       color: var(--muted);
@@ -2297,7 +2310,8 @@
             </div>
           </div>
 
-          <form class="contact-form reveal reveal-delay-1" id="consultation-form" aria-labelledby="consultation-title">
+          <form class="contact-form reveal reveal-delay-1" id="consultation-form" aria-labelledby="consultation-title"
+            action="https://web-dashboard-test.vercel.app/api/customers" method="post">
             <div class="form-content">
               <h3 class="form-title" id="consultation-title">Tư vấn miễn phí</h3>
               <div class="form-row">
@@ -2320,16 +2334,17 @@
                   placeholder="Ví dụ: Tôi muốn giảm thời gian làm báo cáo hàng tuần..." required></textarea>
               </div>
               <button class="button" type="submit">
-                Gửi yêu cầu tư vấn
+                <span class="submit-label">Gửi yêu cầu tư vấn</span>
                 <i data-lucide="send" aria-hidden="true"></i>
               </button>
+              <p class="form-error" role="alert" hidden></p>
               <p class="form-note">Gửi form không phát sinh chi phí hoặc cam kết dịch vụ.</p>
             </div>
             <div class="form-success" aria-live="polite">
               <div>
                 <span class="form-success-icon"><i data-lucide="check" aria-hidden="true"></i></span>
-                <h3>Đã ghi nhận thông tin!</h3>
-                <p>Form demo đang hoạt động. Hãy kết nối endpoint nhận dữ liệu trước khi xuất bản chính thức.</p>
+                <h3 tabindex="-1">Đăng ký thành công!</h3>
+                <p>Cảm ơn bạn đã đăng ký. Chúng tôi sẽ liên hệ để tư vấn cho bạn.</p>
               </div>
             </div>
           </form>
@@ -2414,10 +2429,59 @@
       }
 
       const form = document.querySelector("#consultation-form");
-      form.addEventListener("submit", (event) => {
+      const submitButton = form.querySelector('button[type="submit"]');
+      const submitLabel = form.querySelector(".submit-label");
+      const formError = form.querySelector(".form-error");
+
+      form.addEventListener("submit", async (event) => {
         event.preventDefault();
-        form.querySelector(".form-content").hidden = true;
-        form.querySelector(".form-success").classList.add("is-visible");
+        if (submitButton.disabled || !form.reportValidity()) return;
+
+        const data = new FormData(form);
+        const payload = {
+          fullName: data.get("name").trim(),
+          email: data.get("email").trim(),
+          phoneNumber: data.get("phone").trim(),
+          serviceName: data.get("challenge").trim(),
+        };
+
+        formError.hidden = true;
+        if (Object.values(payload).some((value) => !value)) {
+          formError.textContent = "Vui lòng điền đầy đủ thông tin, không chỉ nhập khoảng trắng.";
+          formError.hidden = false;
+          return;
+        }
+
+        submitButton.disabled = true;
+        submitLabel.textContent = "Đang gửi...";
+        form.setAttribute("aria-busy", "true");
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000);
+
+        try {
+          const response = await fetch(form.action, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+            signal: controller.signal,
+          });
+
+          if (!response.ok) throw new Error("Request failed");
+
+          form.querySelector(".form-content").hidden = true;
+          form.querySelector(".form-success").classList.add("is-visible");
+          form.querySelector(".form-success h3").focus({ preventScroll: true });
+        } catch (error) {
+          formError.textContent = error.name === "AbortError"
+            ? "Chưa nhận được xác nhận từ hệ thống. Vui lòng thử lại sau."
+            : "Chưa gửi được yêu cầu. Vui lòng kiểm tra kết nối và thử lại.";
+          formError.hidden = false;
+        } finally {
+          clearTimeout(timeout);
+          submitButton.disabled = false;
+          submitLabel.textContent = "Gửi yêu cầu tư vấn";
+          form.removeAttribute("aria-busy");
+        }
       });
 
       document.querySelector("#current-year").textContent = new Date().getFullYear();
